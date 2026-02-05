@@ -1,0 +1,4 @@
+# pack-refs with: peeled fully-peeled sorted 
+d29180250c7f7f351dec3dc0ebb49f3d174d01f8 refs/heads/master
+d29180250c7f7f351dec3dc0ebb49f3d174d01f8 refs/remotes/origin/master
+d29180250c7f7f351dec3dc0ebb49f3d174d01f8 refs/tags/cdda-experimental-2026-02-05-2015
