@@ -191,6 +191,7 @@
 #include "string_formatter.h"
 #include "string_input_popup.h"
 #include "surroundings_menu.h"
+#include "system_locale.h"
 #include "talker.h"
 #include "text_snippets.h"
 #include "tileray.h"
@@ -555,15 +556,26 @@ void game::toggle_pixel_minimap() const
 
 void game::toggle_language_to_en()
 {
-    // No-op if we aren't complied with localization
-#if defined(LOCALIZE)
     const std::string english = "en" ;
     static std::string secondary_lang = english;
+
+#if defined(LOCALIZE)
     std::string current_lang = TranslationManager::GetInstance().GetCurrentLanguage();
+#else
+    std::string current_lang = get_option<std::string>( "USE_LANG" );
+    if( current_lang.empty() ) {
+        current_lang = SystemLocale::Language().value_or( english );
+    }
+#endif
+
     secondary_lang = current_lang != english ? current_lang : secondary_lang;
     std::string new_lang = current_lang != english ? english : secondary_lang;
-    set_language( new_lang );
+
+#if !defined(LOCALIZE)
+    get_options().get_option( "USE_LANG" ).setValue( new_lang );
 #endif
+
+    set_language( new_lang );
 }
 
 bool game::is_tileset_isometric() const

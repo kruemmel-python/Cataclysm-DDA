@@ -49,6 +49,7 @@
 #include "input.h"
 #include "main_menu.h"
 #include "mapsharing.h"
+#include "mycelia_subqg_seed.h"
 #include "memory_fast.h"
 #include "options.h"
 #include "ordered_static_globals.h"
@@ -707,6 +708,7 @@ int main( int argc, const char *argv[] )
 #else
     setupDebug( DebugOutput::file );
 #endif
+    mycelia::log_subqg_startup_status();
     // NOLINTNEXTLINE(cata-tests-must-restore-global-state)
     json_error_output_colors = json_error_output_colors_t::color_tags;
 

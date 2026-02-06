@@ -4,9 +4,11 @@
 
 #if defined(LOCALIZE)
 
+#include <array>
 #include <optional>
 #include <unordered_map>
 
+#include "i18n_engine.h"
 #include "translation_document.h"
 #include "translation_manager.h"
 
@@ -23,8 +25,18 @@ class TranslationManager::Impl
         static std::string LanguageCodeOfPath( std::string_view path );
         void ScanTranslationDocuments();
         std::string ConstructContextualQuery( const char *context, const char *message ) const;
+        void InvalidateI18nOverrides();
+        void TryLoadI18nOverrides() const;
+        const char *TryTranslateI18nToken( const std::string &token ) const;
+        const char *TryTranslateI18nPluralToken( const std::string &token, std::size_t n ) const;
+        const char *StoreI18nOverrideResult( std::string text ) const;
         void Reset();
         std::string current_language_code;
+        mutable I18nEngine i18n_override_engine;
+        mutable bool i18n_override_load_attempted = false;
+        mutable bool i18n_override_loaded = false;
+        mutable std::array<std::string, 32> i18n_override_buffer {};
+        mutable std::size_t i18n_override_buffer_index = 0;
     public:
         Impl();
         std::unordered_set<std::string> GetAvailableLanguages();

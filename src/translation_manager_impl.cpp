@@ -1,6 +1,8 @@
 #if defined(LOCALIZE)
 
 #include <cstring>
+#include <limits>
+#include <utility>
 
 #include "cached_options.h"
 #include "debug.h"
@@ -8,6 +10,11 @@
 #include "path_info.h"
 #include "translations.h"
 #include "translation_manager_impl.h"
+
+namespace
+{
+constexpr const char *i18n_token_not_found = "TOKEN_NOT_FOUND";
+}
 
 std::uint32_t TranslationManager::Impl::Hash( const char *str )
 {
@@ -52,6 +59,97 @@ std::string TranslationManager::Impl::LanguageCodeOfPath( std::string_view path 
     return std::string( path.substr( begin, end - begin ) );
 }
 
+void TranslationManager::Impl::InvalidateI18nOverrides()
+{
+    i18n_override_load_attempted = false;
+    i18n_override_loaded = false;
+}
+
+void TranslationManager::Impl::TryLoadI18nOverrides() const
+{
+    if( i18n_override_load_attempted ) {
+        return;
+    }
+    i18n_override_load_attempted = true;
+    i18n_override_loaded = false;
+
+    std::vector<std::string> candidates;
+    const std::string config_dir = PATH_INFO::config_dir();
+    const std::string fallback_catalog = config_dir + "i18n_overrides.txt";
+
+    if( !current_language_code.empty() ) {
+        const std::string language_catalog = config_dir + "i18n_overrides." + current_language_code + ".txt";
+        if( language_catalog != fallback_catalog ) {
+            candidates.emplace_back( language_catalog );
+        }
+
+        const std::size_t split = current_language_code.find_first_of( "_-" );
+        if( split != std::string::npos ) {
+            const std::string language_short = current_language_code.substr( 0, split );
+            if( !language_short.empty() ) {
+                const std::string short_catalog = config_dir + "i18n_overrides." + language_short + ".txt";
+                if( short_catalog != language_catalog && short_catalog != fallback_catalog ) {
+                    candidates.emplace_back( short_catalog );
+                }
+            }
+        }
+    }
+
+    candidates.emplace_back( fallback_catalog );
+
+    for( const std::string &candidate : candidates ) {
+        if( !file_exist( candidate ) ) {
+            continue;
+        }
+        if( i18n_override_engine.load_txt_file( candidate, false ) ) {
+            i18n_override_loaded = true;
+            DebugLog( D_INFO, DC_ALL ) << "[i18n] Loaded override catalog from " << candidate;
+        } else {
+            DebugLog( D_WARNING, DC_ALL ) << "[i18n] Failed to load override catalog '" << candidate
+                                          << "': " << i18n_override_engine.get_last_error();
+        }
+        return;
+    }
+}
+
+const char *TranslationManager::Impl::StoreI18nOverrideResult( std::string text ) const
+{
+    std::string &slot = i18n_override_buffer[i18n_override_buffer_index];
+    slot = std::move( text );
+    const char *result = slot.c_str();
+    i18n_override_buffer_index = ( i18n_override_buffer_index + 1 ) % i18n_override_buffer.size();
+    return result;
+}
+
+const char *TranslationManager::Impl::TryTranslateI18nToken( const std::string &token ) const
+{
+    TryLoadI18nOverrides();
+    if( !i18n_override_loaded ) {
+        return nullptr;
+    }
+    const std::string translated = i18n_override_engine.translate( token, {} );
+    if( std::strcmp( i18n_override_engine.get_last_error(), i18n_token_not_found ) == 0 ) {
+        return nullptr;
+    }
+    return StoreI18nOverrideResult( translated );
+}
+
+const char *TranslationManager::Impl::TryTranslateI18nPluralToken( const std::string &token,
+        std::size_t n ) const
+{
+    TryLoadI18nOverrides();
+    if( !i18n_override_loaded ) {
+        return nullptr;
+    }
+    const int count = n > static_cast<std::size_t>( std::numeric_limits<int>::max() ) ?
+                      std::numeric_limits<int>::max() : static_cast<int>( n );
+    const std::string translated = i18n_override_engine.translate_plural( token, count, {} );
+    if( std::strcmp( i18n_override_engine.get_last_error(), i18n_token_not_found ) == 0 ) {
+        return nullptr;
+    }
+    return StoreI18nOverrideResult( translated );
+}
+
 void TranslationManager::Impl::ScanTranslationDocuments()
 {
     std::vector<std::pair<std::string, std::string>> mo_dirs;
@@ -87,6 +185,7 @@ void TranslationManager::Impl::Reset()
     documents.clear();
     strings.clear();
     strings.max_load_factor( 1.0f );
+    InvalidateI18nOverrides();
 }
 
 TranslationManager::Impl::Impl()
@@ -111,15 +210,17 @@ void TranslationManager::Impl::SetLanguage( const std::string &language_code )
     if( mo_files.empty() ) {
         ScanTranslationDocuments();
     }
-    if( language_code == current_language_code ) {
-        return;
+    if( language_code != current_language_code ) {
+        current_language_code = language_code;
+        if( mo_files.count( current_language_code ) == 0 ) {
+            Reset();
+        } else {
+            LoadDocuments( mo_files[current_language_code] );
+        }
+    } else {
+        InvalidateI18nOverrides();
     }
-    current_language_code = language_code;
-    if( mo_files.count( current_language_code ) == 0 ) {
-        Reset();
-        return;
-    }
-    LoadDocuments( mo_files[current_language_code] );
+    TryLoadI18nOverrides();
 }
 
 std::string TranslationManager::Impl::GetCurrentLanguage() const
@@ -166,6 +267,10 @@ const char *TranslationManager::Impl::Translate( const std::string &message ) co
 
 const char *TranslationManager::Impl::Translate( const char *message ) const
 {
+    if( const char *override_message = TryTranslateI18nToken( message ) ) {
+        return override_message;
+    }
+
     std::optional<std::pair<std::size_t, std::size_t>> entry = LookupString( message );
     if( entry ) {
         const std::size_t document = entry->first;
@@ -178,6 +283,10 @@ const char *TranslationManager::Impl::Translate( const char *message ) const
 const char *TranslationManager::Impl::TranslatePlural( const char *singular, const char *plural,
         std::size_t n ) const
 {
+    if( const char *override_message = TryTranslateI18nPluralToken( singular, n ) ) {
+        return override_message;
+    }
+
     std::optional<std::pair<std::size_t, std::size_t>> entry = LookupString( singular );
     if( entry ) {
         const std::size_t document = entry->first;
@@ -205,6 +314,12 @@ std::string TranslationManager::Impl::ConstructContextualQuery( const char *cont
 const char *TranslationManager::Impl::TranslateWithContext( const char *context,
         const char *message ) const
 {
+    // Context-specific overrides are not encoded in the TXT format yet.
+    // A plain token override still applies here as a global fallback.
+    if( const char *override_message = TryTranslateI18nToken( message ) ) {
+        return override_message;
+    }
+
     std::string query = ConstructContextualQuery( context, message );
     std::optional<std::pair<std::size_t, std::size_t>> entry = LookupString( query.c_str() );
     if( entry ) {
@@ -220,6 +335,12 @@ const char *TranslationManager::Impl::TranslatePluralWithContext( const char *co
         const char *plural,
         std::size_t n ) const
 {
+    // Context-specific overrides are not encoded in the TXT format yet.
+    // A plain token override still applies here as a global fallback.
+    if( const char *override_message = TryTranslateI18nPluralToken( singular, n ) ) {
+        return override_message;
+    }
+
     std::string query = ConstructContextualQuery( context, singular );
     std::optional<std::pair<std::size_t, std::size_t>> entry = LookupString( query.c_str() );
     if( entry ) {

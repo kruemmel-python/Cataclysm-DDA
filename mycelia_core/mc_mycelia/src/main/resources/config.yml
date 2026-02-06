@@ -1,0 +1,40 @@
+driver:
+  command: "C:\\Users\\ralfk\\AppData\\Local\\Programs\\Python\\Python312\\python.exe D:/mc-test/paper/mein_subqg_seed_script.py"
+  timeoutSeconds: 35
+  warmupTimeoutSeconds: 300
+  version: "mycelia-driver 0.4.1"
+  kernelFingerprint: "subqg_simulation_step@a91f"
+  persistent:
+    enabled: true
+    command: "C:\\Users\\ralfk\\AppData\\Local\\Programs\\Python\\Python312\\python.exe D:/mc-test/paper/mein_subqg_seed_script.py"
+
+world:
+  baseBlock: DEEPSLATE
+  surfaceBlock: MYCELIUM
+  oreBlock: AMETHYST_BLOCK
+  seaLevel: 45
+  scale: 0.025
+
+evolution:
+  intervalMinutes: 5
+  mutationsPerWorld: 4
+
+biomes:
+  myzel-invasion:
+    humidity: [0.6, 1.0]
+    temperature: [0.3, 0.7]
+    blocks:
+      base: DEEPSLATE
+      surface: MYCELIUM
+      ore: AMETHYST_BLOCK
+    mobs:
+      hostileBoost: 1.2
+  verdorbener-wald:
+    humidity: [0.2, 0.5]
+    temperature: [0.4, 0.9]
+    blocks:
+      base: MOSS_BLOCK
+      surface: PODZOL
+      ore: EMERALD_BLOCK
+    mobs:
+      hostileBoost: 1.1

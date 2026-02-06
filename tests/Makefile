@@ -15,6 +15,13 @@ ODIR ?= obj
 
 LDFLAGS += -lpthread -L.
 
+# Ensure ncurses is linked for Windows test binaries (cataclysm.a depends on it).
+ifeq ($(TARGETSYSTEM),WINDOWS)
+  ifneq ($(shell pkg-config --libs ncursesw 2>/dev/null),)
+    LDFLAGS += $(shell pkg-config --libs ncursesw)
+  endif
+endif
+
 # Enabling benchmarks
 DEFINES += -DCATCH_CONFIG_ENABLE_BENCHMARKING
 

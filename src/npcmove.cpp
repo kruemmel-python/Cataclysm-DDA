@@ -71,6 +71,7 @@
 #include "map_selector.h"
 #include "mapdata.h"
 #include "memory_fast.h"
+#include "mycelia_swarm.h"
 #include "messages.h"
 #include "mission.h"
 #include "monster.h"
@@ -3278,6 +3279,100 @@ void npc::move_to( const tripoint_bub_ms &pt, bool no_bashing, std::set<tripoint
 }
 
 
+static float mycelia_bionic_factor( const npc &self )
+{
+    const units::energy max_power = self.get_max_power_level();
+    if( max_power <= 0_kJ ) {
+        return 0.0f;
+    }
+    const float max_kj = std::max( 1.0f, static_cast<float>( units::to_kilojoule( max_power ) ) );
+    const float cur_kj = static_cast<float>( units::to_kilojoule( self.get_power_level() ) );
+    const float ratio = std::clamp( cur_kj / max_kj, 0.0f, 1.0f );
+    return 0.25f + 0.75f * ratio;
+}
+
+static bool mycelia_swarm_allowed( const npc &self )
+{
+    if( self.is_hallucination() ) {
+        return false;
+    }
+    if( self.has_flag( json_flag_CANNOT_MOVE ) ) {
+        return false;
+    }
+    if( self.current_target() != nullptr ) {
+        return false;
+    }
+    const npc_attitude att = self.get_attitude();
+    if( att == NPCATT_KILL || att == NPCATT_MUG || att == NPCATT_FLEE || att == NPCATT_FLEE_TEMP ) {
+        return false;
+    }
+    return true;
+}
+
+static std::optional<tripoint_bub_ms> mycelia_swarm_step( const npc &self,
+                                                         const tripoint_bub_ms &desired,
+                                                         const map &here )
+{
+    if( !mycelia_swarm_allowed( self ) ) {
+        return std::nullopt;
+    }
+
+    const float bionic_factor = mycelia_bionic_factor( self );
+    if( bionic_factor <= 0.0f ) {
+        return std::nullopt;
+    }
+
+    const mycelia::SpeciesProfile profile;
+    const mycelia::SwarmParams params = mycelia::swarm_params_from_profile( profile, bionic_factor );
+
+    std::vector<tripoint_bub_ms> neighbors;
+    neighbors.reserve( self.get_cached_friends().size() );
+    const tripoint_bub_ms self_pos = self.pos_bub();
+    for( const weak_ptr_fast<Creature> &fr : self.get_cached_friends() ) {
+        if( const shared_ptr_fast<Creature> fr_ptr = fr.lock() ) {
+            if( !fr_ptr->is_npc() ) {
+                continue;
+            }
+            if( fr_ptr.get() == &self ) {
+                continue;
+            }
+            const tripoint_bub_ms fr_pos = fr_ptr->pos_bub();
+            if( fr_pos.z() != self_pos.z() ) {
+                continue;
+            }
+            if( rl_dist( self_pos, fr_pos ) > params.neighbor_radius ) {
+                continue;
+            }
+            neighbors.push_back( fr_pos );
+        }
+    }
+    if( neighbors.empty() ) {
+        return std::nullopt;
+    }
+
+    std::vector<tripoint_bub_ms> candidates;
+    candidates.reserve( 8 );
+    for( const tripoint_bub_ms &pt : here.points_in_radius( self_pos, 1 ) ) {
+        if( pt == self_pos || pt.z() != self_pos.z() ) {
+            continue;
+        }
+        if( !self.can_move_to( pt ) ) {
+            continue;
+        }
+        candidates.push_back( pt );
+    }
+    if( candidates.empty() ) {
+        return std::nullopt;
+    }
+
+    const mycelia::SwarmDecision decision = mycelia::choose_swarm_step( self_pos, desired,
+                                          neighbors, candidates, params );
+    if( decision.used ) {
+        return decision.step;
+    }
+    return std::nullopt;
+}
+
 void npc::move_to_next()
 {
     while( !path.empty() && pos_bub() == path[0] ) {
@@ -3291,11 +3386,21 @@ void npc::move_to_next()
         return;
     }
 
-    move_to( path[0] );
+    const tripoint_bub_ms desired = path[0];
+    const std::optional<tripoint_bub_ms> swarm_step = mycelia_swarm_step( *this, desired, get_map() );
+    const tripoint_bub_ms step = swarm_step ? *swarm_step : desired;
+
+    move_to( step );
     if( !path.empty() && pos_bub() == path[0] ) { // Move was successful
         path.erase( path.begin() );
     }
+    if( swarm_step && !path.empty() && pos_bub() != path[0] ) {
+        if( rl_dist( pos_bub(), path[0] ) > 1 ) {
+            path.clear();
+        }
+    }
 }
+
 
 void npc::avoid_friendly_fire()
 {

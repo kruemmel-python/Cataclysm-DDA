@@ -10,6 +10,11 @@
 
 constexpr int INVALID_LANGUAGE_VERSION = 0;
 
+#if !defined(LOCALIZE)
+// Defined in translations.cpp for no-localize override catalogs.
+const char *translate_no_localize_lookup( const char *msgid );
+#endif
+
 namespace detail
 {
 
@@ -29,12 +34,12 @@ inline std::string _translate_internal( const std::string &msg )
 
 inline const char *_translate_internal( const char *msg )
 {
-    return msg;
+    return ::translate_no_localize_lookup( msg );
 }
 
 inline std::string _translate_internal( const std::string &msg )
 {
-    return msg;
+    return std::string( ::translate_no_localize_lookup( msg.c_str() ) );
 }
 
 #endif

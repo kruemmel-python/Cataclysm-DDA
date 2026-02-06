@@ -1,0 +1,29 @@
+name: mc_mycelia
+version: 0.1.0
+main: com.mycelia.mc.MyceliaWorldPlugin
+author: Mycelia Security
+api-version: '1.21'
+commands:
+  myceliaworld:
+    description: Erzeugt eine neue Welt über den Mycelia-Treiber
+    usage: /<command> <weltname> [--seed <zahl>]
+    permission: mc_mycelia.world.generate
+  mycelia:
+    description: Steuert den Mycelia-Kern (Evolution, Debug, Lore, Anomalien)
+    usage: /mycelia <attune|stabilize|corrupt|debug|health|lore|dream|otoc|timewarp>
+permissions:
+  mc_mycelia.world.generate:
+    description: Erlaubt das Erstellen von Mycelia-basierten Welten
+    default: op
+  mc_mycelia.world.remove:
+    description: Erlaubt das Löschen von Welten
+    default: op
+  mc_mycelia.evolve:
+    description: Erlaubt Evolution-Änderungen
+    default: op
+  mc_mycelia.debug:
+    description: Erlaubt Diagnostik-Kommandos
+    default: op
+  mc_mycelia.lore:
+    description: Erlaubt Lore-/Traum-/OTOC-Kommandos
+    default: op

@@ -1,0 +1,1 @@
+pyinstaller --noconsole --onefile --name "MyceliaVault_Enterprise" --add-data "..\bin\CC_OpenCl.dll;." --hidden-import "mycelia_vault_v4" mycelia_gui_v4.py

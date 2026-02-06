@@ -91,7 +91,42 @@ inline const char *npgettext( const char *const context, const char *const msgid
 
 #else // !LOCALIZE
 
-#define _(STRING) (STRING)
+const char *translate_no_localize_lookup( const char *msgid );
+
+inline const char *translate_no_localize( const char *msgid )
+{
+    return translate_no_localize_lookup( msgid );
+}
+
+inline const char *translate_no_localize( char *msgid )
+{
+    return translate_no_localize_lookup( msgid );
+}
+
+inline std::string translate_no_localize( const std::string &msgid )
+{
+    return std::string( translate_no_localize_lookup( msgid.c_str() ) );
+}
+
+template<std::size_t N>
+inline const char *translate_no_localize( const char ( &msgid )[N] )
+{
+    return translate_no_localize_lookup( msgid );
+}
+
+template<std::size_t N>
+inline const char *translate_no_localize( char ( &msgid )[N] )
+{
+    return translate_no_localize_lookup( msgid );
+}
+
+template<typename T>
+inline const T &translate_no_localize( const T &msgid )
+{
+    return msgid;
+}
+
+#define _(STRING) ( translate_no_localize( STRING ) )
 
 #define n_gettext(STRING1, STRING2, COUNT) ((COUNT) == 1 ? _(STRING1) : _(STRING2))
 #define pgettext(STRING1, STRING2) _(STRING2)
